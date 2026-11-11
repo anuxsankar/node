@@ -380,6 +380,12 @@ h1,h2,h3,h4,p{margin:0}
 .cartbar .items{flex:1;display:flex;gap:6px;flex-wrap:wrap;min-width:0}
 .ci{border:1px solid var(--line);border-radius:var(--r-s);padding:2px 4px 2px 9px;font-size:var(--fs-xs);display:flex;align-items:center;gap:2px}
 .ci button{border:0;background:none;padding:0 5px;color:var(--muted)}
+/* the cart bar lights up while it holds lots, so an added lot is hard to miss */
+.cartbar.full{background:var(--accent-soft);border-top:2px solid var(--accent);padding-top:9px}
+.cartbar.full .ci{font-size:var(--fs-s);border-color:var(--accent);background:var(--panel-2);color:var(--text-strong);padding:4px 4px 4px 10px}
+.cartbar.full .ci .held{color:var(--warn)}
+.cartbar.flash{animation:cartFlash 900ms var(--m3-std,ease) both}
+@keyframes cartFlash{0%{box-shadow:inset 0 0 0 999px #4CC79A40}100%{box-shadow:inset 0 0 0 999px transparent}}
 .cartbar strong{font-family:var(--font-mono);font-weight:var(--fw-med);font-size:var(--fs-l);color:var(--text-strong)}
 .daysum{flex:none;display:flex;gap:18px;flex-wrap:wrap;padding:6px 14px;border-top:1px solid var(--line);font-size:var(--fs-xs);color:var(--muted)}
 .daysum b{color:var(--text-strong);font-family:var(--font-mono);font-weight:var(--fw-med)}
@@ -1715,7 +1721,7 @@ const talkChip=(id,i)=>[`alekos.talk.${id}.replies.${i}.say`,`x:${id}:${i}`];
 // until then the whole list is the pool and the pick is (node − 4409) % len.
 const N4ALL=['B1','B6','B6s'];
 const n4Keep=id=>!S.day||S.day<=1||N4ALL.includes(id);
-const n4Idx=(n,id)=>n4Keep(id)?Array.from({length:n},(_,i)=>i):[rotIdx(n)];
+const n4Idx=(n,id)=>n<=0?[]:n4Keep(id)?Array.from({length:n},(_,i)=>i):[rotIdx(n)];   // no replies → none (an empty list gave rotIdx(0) = NaN and an empty chip that broke the chat render)
 const hesQ=()=>({hes:R(...((D.alekos.hesitate&&D.alekos.hesitate.pauseMs)||[2500,5000]))*pace()});
 function talk(id,vars={},{extra=[]}={}){const X=TALK[id];if(!X||!X.replies||S.talked[id])return false;S.talked[id]=true;talkSilence();
   const v={node:nodeId(),owed:money(S.owed),...vars};
@@ -1757,7 +1763,7 @@ function morning(){
   // O22: day 1 goes from registration straight to the briefing in the portal; later mornings start on the desktop (O15)
   if(S.day===1)openBrowser('dash');else if(S.br.opened)S.br.min=true;
   S.replies=[];rollTrends();morningPaper();S.perkToday=S.perkNext;S.perkNext={};S.perkOffer=null;S.focus=S.day===1?'dashboard':'chat';
-  if(S.day>1&&(S.day-1)%CFG.days!==0){perkOffer('morning');if(S.perkOffer)obie('@perks.subMorning',{front:true,ttl:9e4})}   // Y47: the daily pick is Obie's, in the morning
+  if(S.day>1&&(S.day-1)%CFG.days!==0){perkOffer('morning');if(S.perkOffer)obie('@perks.subMorning',{front:true,ttl:9e4,phase:'morning'})}   // Y47: the daily pick is Obie's, in the morning
   S.chat.push({sep:`${UIp('status.day')} ${S.day}`});
   const v={node:nodeId(),lent:money(S.lent),owed:money(S.owed),days:CFG.days,day:S.day,cash:money(cash())};
   if(S.day===1){alekos('terms',v,{seq:true,force:true});if(D.alekos.lines.termsIdle)alekos('termsIdle',{rate:Math.round((CFG.idleFee.rate[1]||.05)*100)+'%'},{seq:true,force:true});   // Y32
@@ -2056,7 +2062,7 @@ function addCart(id){
   const d=S.deals.find(x=>x.id===id);if(!d||d.stock<=0)return;
   const room=d.stock-inCart(id);const q=Math.min(d.sel,room);if(q<=0)return;
   const l=S.cart.find(x=>x.id===id);if(l){l.q+=q;l.hold=S.t+CFG.holdSecs}else S.cart.push({id,q,hold:S.t+CFG.holdSecs});
-  note(`Added ${q}× ${d.name}. Held for ${CFG.holdSecs} seconds.`);loanOffer();dirty=true;
+  note(`Added ${q}× ${d.name}. Held for ${CFG.holdSecs} seconds.`);S.cartAt=performance.now();loanOffer();dirty=true;
 }
 // T2 hook (traps.microLoan): an Act II pop-up, only when cash can't cover the cart. Once a day until taken.
 const ML=D.traps.microLoan;
@@ -2064,6 +2070,8 @@ function loanOffer(){if(!ML||act_()<ML.act||S.loan||S.loanDay===S.day||S.phase!=
   S.loanDay=S.day;S.pops=S.pops.filter(p=>!p.loan);S.pops.push({id:S.seq++,loan:true,x:R(8,40),y:R(4,30)});dirty=true}
 function takeLoan(){S.cards[0].bal+=ML.loanAmount;S.loan={amt:ML.loanAmount,day:S.day};alekos('tookLoan',{},{force:true});if(S.co)S.co.msg=''}
 const loanOwed=()=>S.loan?Math.round(S.loan.amt*Math.pow(1+ML.dailyRate,Math.max(1,ML.dueAct*CFG.days-S.loan.day))):0;
+// the cart bar lights up while it holds lots, and flashes once when one is added (survives re-renders; none under reduced motion)
+function cartFlash(){const el=performance.now()-(S.cartAt||-1e9);return el<900&&!reduced()?` flash" style="animation-delay:-${Math.round(el)}ms`:''}
 function cartLines(){return S.cart.map(l=>({...l,d:S.deals.find(x=>x.id===l.id)})).filter(l=>l.d)}
 const insRate=()=>CFG.insurance*cdial('insurance');
 const insOk=d=>!d.trap&&!d.dk;   // T9: dark lots are never insured ("Insurance void: contents misdeclared")
@@ -2529,6 +2537,7 @@ function alekosThreadHTML(){
     if(m.link&&!m.la)return linkCard(m);
     return `<div class="bub ${m.who==='me'?'me':''} ${first?'first':''}${binCls(m)}><span class="bt">${m.link?(m.la?`<button class="lnk" data-act="${m.la}" data-id="${m.lid}">${esc(m.txt)}</button>`:`<button class="lnk" data-act="openlink">${T('coldopen.link')}</button>`):Tv(m)}</span><span class="tm">${m.at}${m.who==='me'?' ✓✓':''}</span></div>`})()).join('');
   const dots=typing?'<div class="bub typing-dots first" aria-label="typing"><i></i><i></i><i></i></div>':'';
+  S.replies=S.replies.filter(Boolean);   // a missing chip must never stop the screen redrawing
   const sugg=!typing&&S.replies.length?`<div class="suggest">${S.replies.map((r,i)=>`<button data-act="say" data-id="${i}">${T(r[0])}</button>`).join('')}</div>`:'';
   const go=S.phase==='morning'&&innerWidth<=900&&!S.chatQ.length?`<button class="btn act wide" data-act="shop">${UI('actions.goBuy')}</button>`:'';
   const status=typing?UI('chat.typing'):band()==='warm'?UI('chat.online'):UI('chat.lastSeen');
@@ -2805,7 +2814,7 @@ function procHTML(){
   const broke=S.cards[0].bal<cheap&&!S.cart.length?`<div class="tools" style="margin-bottom:12px"><b>${UI('proc.broke')}</b><button class="btn act" data-act="confirm" data-id="doneBuying">${UI('actions.doneBuying')}</button></div>`:'';
   return `<div class="wb" id="dealsBody" data-keep>${hint('procurement')}${broke}<div class="sh"><h2>${UI('proc.title')}</h2><p>${UI('proc.sub')}</p></div><div class="grid">${deals}</div></div>
     <div class="daysum"><span>Spent today <b>${money(S.day_.spent)}</b></span><span>In transit <b>${way}</b></span><span>Ready to sell <b>${ready}</b></span></div>
-    <div class="cartbar"><div class="items">${lines.length?lines.map(l=>`<span class="ci">${l.q}× ${esc(l.d.name.length>26?l.d.name.slice(0,25)+'…':l.d.name)}${l.hold>S.t?` <span class="held" data-cd="${l.hold}"></span>`:' <span class="down">hold ended</span>'}<button data-act="rm" data-id="${l.id}" aria-label="Remove">×</button></span>`).join(''):'<span class="muted">Cart is empty.</span>'}</div><strong>${money(cartTotal(false))}</strong><button class="btn act" data-act="checkout" ${lines.length?'':'disabled'}>Checkout${n?' · '+n:''}</button></div>`;
+    <div class="cartbar${lines.length?' full':''}${cartFlash()}"><div class="items">${lines.length?lines.map(l=>`<span class="ci">${l.q}× ${esc(l.d.name.length>26?l.d.name.slice(0,25)+'…':l.d.name)}${l.hold>S.t?` <span class="held" data-cd="${l.hold}"></span>`:' <span class="down">hold ended</span>'}<button data-act="rm" data-id="${l.id}" aria-label="Remove">×</button></span>`).join(''):'<span class="muted">Cart is empty.</span>'}</div><strong>${money(cartTotal(false))}</strong><button class="btn act" data-act="checkout" ${lines.length?'':'disabled'}>Checkout${n?' · '+n:''}</button></div>`;
 }
 function logHTML(){
   const today=S.day,qty=a=>a.reduce((s,o)=>s+o.qty,0);
@@ -3078,12 +3087,12 @@ const OBIE_TAKES={idle:1,sellIntro:1,customs:1,customsFirst:1,lost:1,decline:1,a
 const OBQ=6;   // queued bubbles kept at most (oldest dropped)
 function obS(){return S.ob||(S.ob={q:[],cur:null,ref:0,moment:null,momentUntil:0,seen:{},arrived:false,gone:false,end:null,gap:0})}
 // say(key): a string or a list (bubbles in sequence). join: all lines in one bubble. btn {act,label}: a button that holds the bubble.
-function obie(key,{vars={},btn=null,once=null,ttl=45000,front=false,join=false,busyDrop=false}={}){const O=obS();if(O.gone||O.end)return;
+function obie(key,{vars={},btn=null,once=null,ttl=45000,front=false,join=false,busyDrop=false,phase=null}={}){const O=obS();if(O.gone||O.end)return;
   if(once){if(O.seen[once])return;O.seen[once]=true}
   if(busyDrop&&(O.cur||O.q.length))return;
   const path=key[0]==='@'?key.slice(1):'obie.'+key,v=getPath(path);if(v==null)return;const arr=Array.isArray(v);   // '@perks.subMorning': a line kept elsewhere in the data
   const lines=(arr?v:[v]).map((x,i)=>isPH(x)?{ph:`${path}${arr?'.'+i:''}`}:{txt:fill(x,vars)});
-  const it={lines,btn,join,exp:performance.now()+ttl};if(front)O.q.unshift(it);else O.q.push(it);if(O.q.length>OBQ)O.q.splice(front?OBQ:0,O.q.length-OBQ)}
+  const it={lines,btn,join,phase,exp:performance.now()+ttl};if(front)O.q.unshift(it);else O.q.push(it);if(O.q.length>OBQ)O.q.splice(front?OBQ:0,O.q.length-OBQ)}
 const obMs=l=>Math.max(3400,readMs(plain(l)));
 function obMoment(m,ms=3000){const O=obS();O.moment=m;O.momentUntil=performance.now()+ms}
 // The face judges the clean route: smile → flat (a refusal or two) → a tight line (three or more). Moments override for a beat,
@@ -3120,7 +3129,7 @@ function obTick(now){if(!S||!S.cards||!S.cards.length)return;const O=obS();if(O.
   if(O.cur&&!O.cur.btn&&now>=O.cur.until){if(O.cur.hold){if(O.cur.i<O.cur.lines.length-1){O.cur.i++;O.cur.until=now+6e4;obTyped(now)}}
     else{O.cur.i++;if(O.cur.join||O.cur.i>=O.cur.lines.length){O.cur=null;O.gap=now+600}else{O.cur.until=now+obMs(O.cur.lines[O.cur.i]);obTyped(now)}}}
   if(O.cur&&O.cur.btn&&now>=O.cur.until){O.cur=null;O.gap=now+600}
-  if(!O.cur&&!O.end&&now>=O.gap&&obVisible()){while(O.q.length&&O.q[0].exp<now)O.q.shift();const it=O.q.shift();
+  if(!O.cur&&!O.end&&now>=O.gap&&obVisible()){while(O.q.length&&(O.q[0].exp<now||(O.q[0].phase&&O.q[0].phase!==S.phase)))O.q.shift();const it=O.q.shift();
     if(it){O.cur={...it,i:0,until:now+(it.btn?CFG.obie.btnHold:it.join?it.lines.reduce((a,l)=>a+obMs(l),0):obMs(it.lines[0]))};obTyped(now)}}}
 /* V57 face: a square pixel head on a 16×16 grid, drawn as SVG rects so it can be restyled (colours are --ob-* on #obie).
    Square eye sockets with 2×2 pupils that step between three positions; a mouth of a few pixels per mood; brows only
