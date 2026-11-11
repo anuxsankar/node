@@ -3112,9 +3112,11 @@ function obSale(st,q){const O=obS();if(!O.arrived)return;obMoment('smile',3000);
     obie('story.act3Sale',{vars:{chip:Tp(ck),mins},busyDrop:true});return}
   if(st.dk>=1&&act_()>=2&&!O.seen.firstDark){O.seen.firstDark=true;obie('story.firstDark');return}
   if(Math.random()<.3)obie('say.fastSale',{busyDrop:true})}
-// V57: Obie docks in the centre of the top bar in working hours (morning to Clock out); the slot is empty off-hours
+// V57 (amended by Anu, H-100): Obie is a portal feature. It floats in the portal's bottom-right corner, above the cart bar,
+// in working hours (morning to Clock out), and only while the portal is open and showing
 const OB_ON=['morning','shop','dusk','sell','shut'];
-function obVisible(){const O=S&&S.ob;if(!O||O.gone)return false;if(O.end)return true;return O.arrived&&OB_ON.includes(S.phase)&&!S.beat&&!!$('#sbar .sb')}
+const obPortal=()=>{const w=$('#w-dashboard');if(!w||!S.br.opened||S.br.min)return null;return w.querySelector('.bview.theme-charon')};
+function obVisible(){const O=S&&S.ob;if(!O||O.gone)return false;if(O.end)return true;return O.arrived&&OB_ON.includes(S.phase)&&!S.beat&&!!obPortal()}
 // Endings (obie.md §6): polite to the last. Greeks: two bubbles, black before you can answer. State: two bubbles over the
 // notice. Walk Away: the angry face for one beat, then nothing.
 function obEnd(kind){const O=obS();if(O.gone)return;O.q=[];O.end=kind;const now=performance.now();
@@ -3168,15 +3170,14 @@ function renderObie(now){let el=document.getElementById('obie');const O=S&&S.ob,
   if(sig!==OBSIG){OBSIG=sig;el.dataset.mood=mood;el.classList.toggle('ob-end',!!O.end);el.querySelector('.ob-mouth').setAttribute('d',OBMOUTH[mood]||OBMOUTH.flat);
     const b=el.querySelector('.ob-bub');b.hidden=!c;b.classList.toggle('typing',typing);
     if(c)b.innerHTML=(typing?`<p class="ob-dots" aria-hidden="true"><i></i><i></i><i></i></p>`:ls.map(l=>`<p>${obLine(l)}</p>`).join('')+(c.btn?`<button class="btn sm act" data-act="${c.btn.act}">${T('obie.'+c.btn.label)}</button>`:''))+(O.end?'':`<button class="ob-x" data-act="obx" aria-label="Dismiss">×</button>`)}
-  // position: the centre of the top bar, in the gap between the money and the clock; at a State or Walk Away ending, the
-  // screen's bottom-right. The bubble opens to whichever side has more room and never reaches the clock.
-  const sb=$('#sbar .sb'),low=!sb||O.end==='state'||O.end==='walk';let fs=48,x,y,side='l',bw=300;
-  if(!low){const r=sb.getBoundingClientRect(),g=sb.querySelector('.seg.grow'),gr=g?g.getBoundingClientRect():{left:r.left+r.width*.3,right:r.right-r.width*.3};
-    fs=r.height>=84?64:48;const lo=gr.left+fs/2+8,hi=Math.max(lo,gr.right-fs/2-8),cx=clamp(r.left+r.width/2,lo,hi);x=cx-fs/2;y=r.top+(r.height-fs)/2;
-    const roomL=x-gr.left-20,roomR=gr.right-(x+fs)-20;side=roomR>=roomL?'r':'l';bw=Math.min(320,Math.max(roomL,roomR));if(bw<180){side='d';bw=Math.min(300,gr.right-gr.left-8)}}
-  else{x=innerWidth-18-fs;y=innerHeight-64-fs;side='l';bw=300}
+  // position: the portal's bottom-right corner, sitting above the cart bar when there is one; the bubble opens to its left.
+  // At a State or Walk Away ending (or with no portal), the screen's bottom-right.
+  const pv=obPortal(),low=!pv||O.end==='state'||O.end==='walk';let fs=48,x,y,side='l',bw=300;
+  if(!low){const r=pv.getBoundingClientRect(),cb=pv.querySelector('.cartbar'),bot=Math.min(r.bottom,cb?cb.getBoundingClientRect().top:r.bottom);
+    x=r.right-fs-18;y=bot-fs-14;bw=Math.max(180,Math.min(300,x-r.left-40))}
+  else{x=innerWidth-18-fs;y=innerHeight-64-fs;bw=300}
   const fsig=[low,fs,Math.round(x),Math.round(y),side,Math.round(bw)].join('|');
-  if(fsig!==OBFS){OBFS=fsig;el.style.left=Math.round(x)+'px';el.style.top=Math.round(y)+'px';el.style.setProperty('--ob-size',fs+'px');el.style.setProperty('--ob-bw',Math.round(bw)+'px');el.dataset.side=side;el.classList.toggle('ob-low',low)}
+  if(fsig!==OBFS){OBFS=fsig;el.style.left=Math.round(x)+'px';el.style.top=Math.round(y)+'px';el.style.setProperty('--ob-size',fs+'px');el.style.setProperty('--ob-bw',Math.round(bw)+'px');el.dataset.side=side;el.classList.add('ob-low')}
   // the sprite: blink, pupils, bob
   const f=el.querySelector('.ob-face').getBoundingClientRect(),shut=obBlinking(now),[px,py]=obLook(now,f,rm),bob=typing&&!rm&&Math.floor(now/200)%2===1;
   const ssig=[shut,px,py,bob].join('');if(el.dataset.spr!==ssig){el.dataset.spr=ssig;el.classList.toggle('ob-blink',shut);
