@@ -1536,6 +1536,14 @@ html.rm .spin,html.nm .spin{animation:none}
 
 .lnk.abandon{justify-self:center;margin-top:6px;color:var(--down);font-size:var(--fs-s)}   /* H-136 */
 
+/* Anu: benefits by name on the header's second line */
+.bennames{display:flex;gap:4px;flex:none;margin-right:8px}
+.benn{font-size:var(--fs-xs);padding:1px 6px;border:1px solid var(--line-strong);border-radius:var(--r-xs);color:var(--text-strong);white-space:nowrap}
+.benn.uncommon{border-color:var(--accent)} .benn.rare{border-color:var(--rare)} .benn.veryRare{border-color:var(--warn)}
+.sb-id .bens{display:none}
+/* Anu: before the market opens, marketing collapses (it can't be used yet) */
+.tools.prem .boosts,.tools.prem .mk-h,.tools.prem .running{display:none}
+
 </style>
 </head>
 <body>
@@ -1835,11 +1843,15 @@ function blip(f){if(!AC||!OPT.sound)return;try{const t=AC.currentTime,o=AC.creat
 function tone_(f,at,len,vol){const t=AC.currentTime+at,o=AC.createOscillator(),g=AC.createGain();o.type='sine';o.frequency.value=f;g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(vol,t+.012);g.gain.exponentialRampToValueAtTime(.0001,t+len);o.connect(g).connect(mast());o.start(t);o.stop(t+len+.03)}
 /* V66: muffled, moody 2001-PC cues (original). Everything runs through one soft low-pass, so the cues sit behind the glass. */
 let MUF=null;const muf=()=>{if(!MUF){MUF=AC.createBiquadFilter();MUF.type='lowpass';MUF.frequency.value=1500;MUF.Q.value=.4;const g=AC.createGain();g.gain.value=.9;MUF.connect(g).connect(mast())}return MUF};
-function mt(f,at,len,vol,type='sine'){const t=AC.currentTime+at,o=AC.createOscillator(),g=AC.createGain();o.type=type;o.frequency.value=f;g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(vol,t+.02);g.gain.exponentialRampToValueAtTime(.0001,t+len);o.connect(g).connect(muf());o.start(t);o.stop(t+len+.05)}
+let SFXOB=false;   // Obie's cues: a bright, clear square that cuts through the muffled room
+function mt(f,at,len,vol,type='sine'){if(SFXOB){type='square';vol*=.55}const t=AC.currentTime+at,o=AC.createOscillator(),g=AC.createGain();o.type=type;o.frequency.value=f;g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(vol,t+.02);g.gain.exponentialRampToValueAtTime(.0001,t+len);o.connect(g).connect(SFXOB?mast():muf());o.start(t);o.stop(t+len+.05)}
 function mn(at,len,vol,lo,hi){const t=AC.currentTime+at,b=AC.createBuffer(1,Math.max(1,Math.floor(AC.sampleRate*len)),AC.sampleRate),d=b.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;
   const n=AC.createBufferSource(),f=AC.createBiquadFilter(),g=AC.createGain();n.buffer=b;f.type='bandpass';f.frequency.value=(lo+hi)/2;f.Q.value=(lo+hi)/2/(hi-lo);g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(.0001,t+len);n.connect(f).connect(g).connect(muf());n.start(t);n.stop(t+len)}
-function sfx(k){if(!AC||!OPT.sound||OPT.sfx===false)return;try{
+function sfx(k){if(!AC||!OPT.sound||OPT.sfx===false)return;SFXOB=/^ob[A-Z]/.test(k);try{
   if(k==='msg'){mt(587,0,.22,.035);mt(880,.07,.3,.025)}
+  else if(k==='desk'){[392,523,659,784].forEach((f,i)=>mt(f,i*.11,.9-i*.1,.026,'triangle'));mt(196,0,1.4,.018)}   // the desktop comes alive: a warm chime, every node
+  else if(k==='regType'){mt(1100,0,.03,.012,'square')}   // the operator designation types out
+  else if(k==='stamp'){mn(0,.06,.06,200,900);mt(110,0,.18,.04,'triangle')}
   else if(k==='msgSoft'){mt(784,0,.16,.012)}   // a message lands in the thread you're reading
   else if(k==='click'){mn(0,.012,.02,1800,3400)}   // every button: a faint key-click
   else if(k==='open'){mt(330,0,.12,.018);mt(440,.04,.14,.014)}   // a window opens: always the same soft rise
@@ -2068,7 +2080,7 @@ function coldNext(){
     alekos('offer',{node:nodeId()},{seq:true,force:true});
     S.chatQ.push({replies:offerReplies()});
   }
-  if(S.cold===2){audioInit();{const k=S.mk,to=k.p*(1-CFG.crashIndexDrop);k.hist=Array.from({length:24},(_,i)=>k.p-(k.p-to)*Math.pow(i/23,.6)+(i%3-1)*.4);k.p=to;k.target=to;mkDirty=true}newsNote(Tp('coldopen.crash.title'),{art:'crash',key:'coldopen.crash.title'});hush(CFG.hush.med,1500);
+  if(S.cold===2){audioInit();sfx('desk');{const k=S.mk,to=k.p*(1-CFG.crashIndexDrop);k.hist=Array.from({length:24},(_,i)=>k.p-(k.p-to)*Math.pow(i/23,.6)+(i%3-1)*.4);k.p=to;k.target=to;mkDirty=true}newsNote(Tp('coldopen.crash.title'),{art:'crash',key:'coldopen.crash.title'});hush(CFG.hush.med,1500);
     if(isFirstNode()&&D.coldopen.preText)S.preAt=performance.now()+CFG.preTextDelay;else S.offerAt=performance.now()+CFG.offerDelay
     S.firstAt=Object.fromEntries(FRIENDS.filter(f=>f.first).map(f=>[f.id,performance.now()+(f.first.afterMs||3000)]))}   // N5: Sasha within seconds
   S.focus=S.cold>=3?'chat':'dashboard';
@@ -2859,6 +2871,9 @@ function render(){
 }
 const inDash=()=>['morning','shop','dusk','sell','shut','night','settle','pass','greeks'].includes(S.phase);
 // V67: active benefits (today's and the run's) as small icons in the header; hover or focus shows the name and effect
+// Anu: the benefits you're running with, by name, where you scan (today's and the run's)
+function benNames(){const ids=[...Object.keys(S.perkToday||{}).filter(k=>S.perkToday[k]),...Object.keys(S.perkRun||{}).filter(k=>S.perkRun[k])];if(!ids.length)return '';
+  return `<span class="bennames">${ids.map(id=>{const pk=pkOf(id),i=PK.indexOf(pk);if(!pk)return '';const n=Tp(`perks.pool.${i}.n`),d=Tp(`perks.pool.${i}.d`);return `<span class="benn ${pk.tier}" title="${esc(d)}">${esc(n)}</span>`}).join('')}</span>`}
 function benStrip(){const ids=[...Object.keys(S.perkToday||{}).filter(k=>S.perkToday[k]),...Object.keys(S.perkRun||{}).filter(k=>S.perkRun[k])];if(!ids.length)return '';
   return `<div class="bens" aria-label="${esc(Tp('perks.title'))}">${ids.map(id=>{const pk=pkOf(id),i=PK.indexOf(pk);if(!pk)return '';const n=Tp(`perks.pool.${i}.n`),d=Tp(`perks.pool.${i}.d`);return `<span class="ben ${pk.tier}" tabindex="0" title="${esc(n+': '+d)}" aria-label="${esc(n+': '+d)}">${esc(n[0])}</span>`}).join('')}</div>`}
 // V62: the old top bar goes; its contents are the header inside the browser (headHTML)
@@ -2879,7 +2894,7 @@ function headHTML(){
     <div class="seg big"><span>${UI('status.cash')}</span><b id="cashT">${money(S.cshow==null?cash():S.cshow)}</b></div>
     <div class="seg grow"></div>
     ${live||P==='shut'?`<div class="timerbox" id="tbox"><div class="tclock"><span class="tlab">${lab}</span><span class="tnow"><b id="timer" class="num">${clock()}</b>${P==='shut'?'':`<span class="tcd"><b id="tcd" class="num">${cdText()}</b><span>${UI('status.'+(P==='shop'?'untilProc':P==='dusk'?'untilMarket':'untilClose'))}</span></span>`}</span>${strip}</div><div class="tbtns">${cta}${P==='shut'?'':`<button class="btn sm ghost" data-act="pause">${S.paused?UI('actions.resume'):UI('actions.pause')}</button>`}</div></div>`:''}
-  </div><div class="ticker"><span class="lab" id="tickLab" data-own></span><span id="tickTxt" data-own></span></div></div>`;
+  </div><div class="ticker">${benNames()}<span class="lab" id="tickLab" data-own></span><span id="tickTxt" data-own></span></div></div>`;
 }
 // V55: real minutes and seconds to the next event on the clock
 const cdText=()=>{const t=Math.max(0,Math.ceil(timerLeft()));return Math.floor(t/60)+':'+pad(t%60)};
@@ -3182,7 +3197,7 @@ function assignHTML(){const R=D.coldopen.register;
   const code=`<div class="lc-row acode"><span>${UI('linkCard.codeLabel')}</span><code>${accessCode()}</code></div>`;
   if(!S.assigned)return `<div class="bpage"><div class="bcard reg"><h2>${T('coldopen.register.title')}</h2>${code}<span class="dots3" aria-label="Loading"><i></i><i></i><i></i></span></div></div>`;
   const id=nodeId(),el=performance.now()-(S.stampAt||0),n=R.lines.length,shown=Math.min(n,Math.floor(el/900)+1),te=el-n*900;
-  const typed=reduced()?id.length:clamp(Math.floor(te/CFG.typeMs),0,id.length),stamped=te>0&&typed>=id.length;
+  const typed=reduced()?id.length:clamp(Math.floor(te/CFG.typeMs),0,id.length),stamped=te>0&&typed>=id.length;if(te>0&&typed>(S.regTyped||0)){S.regTyped=typed;sfx('regType')}if(stamped&&!S.regStamped){S.regStamped=true;sfx('stamp')}
   return `<div class="bpage"><div class="bcard reg"><h2>${T('coldopen.register.title')}</h2>
     ${code}<div class="reglines">${R.lines.map((l,i)=>`<p class="${i<shown?'on':''}"${i<shown?regIn(el-i*900):''}>${T('coldopen.register.lines.'+i)}</p>`).join('')}</div>
     <div class="assign" aria-label="${id}">${te>0?esc(id.slice(0,typed)):''}<span class="cur" aria-hidden="true"></span></div><p class="regstamp ${stamped?'on':''}"${stamped?regIn(te-id.length*CFG.typeMs,500):''}>${T('coldopen.register.stamp')}</p>
@@ -3317,7 +3332,7 @@ function marketHTML(){
   const runs=[...(ads?[{n:'Ads',until:S.adsUntil,dur:CFG.adTime}]:[]),...S.boosts.filter(b=>b.until>S.t).map(b=>{const bb=BOOSTS.find(x=>x.id===b.id);return{n:(b.add<0?'Backfired: ':'')+bb.n,until:b.until,dur:b.dur,bad:b.add<0}})];
   const running=`<div class="running">${runs.length?runs.map(r=>`<span class="run ${r.bad?'bad':''}">${esc(r.n)} · <span data-cd="${r.until}"></span><i data-exp="${r.until}" data-dur="${r.dur}"></i></span>`).join(''):`<span class="muted" style="font-size:var(--fs-xs)">${UI('market.idle')}</span>`}</div>`;
   const mkt=open||S.phase==='dusk';
-  const tools=mkt?`<div class="tools">${S.phase==='dusk'?`<div class="sh" style="margin:0"><h2>${UI('dusk.title')}</h2><p>${UI('dusk.sub')}</p></div>${S.mktHold?`<button class="btn act" data-act="mktopen">${T('obie.walk.button')}</button>`:''}<p class="muted" style="font-size:var(--fs-s)">${UI('dusk.body')}</p><p class="dsum">${duskSummary()}</p><button class="lnk" data-act="tab" data-id="log">${UI('dusk.nudge')}</button>`:''}<h3 class="mk-h">${UI('market.marketingTitle')}</h3>${hint('marketing')}${running}<div class="stat"><div class="seg"><span>${UI('market.listed')}</span><b>${S.inv.filter(s=>s.listed).length} / ${S.inv.length}</b></div></div>
+  const tools=mkt?`<div class="tools ${S.phase==='dusk'?'prem':''}">${S.phase==='dusk'?`<div class="sh" style="margin:0"><h2>${UI('dusk.title')}</h2><p>${UI('dusk.sub')}</p></div>${S.mktHold?`<button class="btn act" data-act="mktopen">${T('obie.walk.button')}</button>`:''}<p class="muted" style="font-size:var(--fs-s)">${UI('dusk.body')}</p><p class="dsum">${duskSummary()}</p><button class="lnk" data-act="tab" data-id="log">${UI('dusk.nudge')}</button>`:''}<h3 class="mk-h">${UI('market.marketingTitle')}</h3>${hint('marketing')}${running}<div class="stat"><div class="seg"><span>${UI('market.listed')}</span><b>${S.inv.filter(s=>s.listed).length} / ${S.inv.length}</b></div></div>
       <div class="boosts"><button class="boost" data-act="ads" ${!open||ads||cash()<adCost()||!anyListed?'disabled':''}><i class="mki" aria-hidden="true">◎</i><b>${UI('market.runAds')}</b><small>${ads?UI('market.running'):UI('market.adsSub',{amt:money(adCost()),secs:CFG.adTime})}</small></button>${BOOSTS.map(b=>{const on=S.boosts.find(x=>x.id===b.id&&x.until>S.t);return `<button class="boost" data-act="boost" data-id="${b.id}" ${!open||on||cash()<boostCost(b)||!anyListed?'disabled':''}><i class="mki" aria-hidden="true">${['▲','◆','●','■'][BOOSTS.indexOf(b)%4]}</i><b>${esc(b.n)}</b><span class="mk-reach"><span class="up">↑ ${Math.round((b.add||0)*100)}%</span> · ${money(boostCost(b))}</span><small>${on?UI('market.active'):esc(b.d)}</small></button>`}).join('')}</div></div>`
     :`<div class="banner">${UI('dusk.wait',{opens:hhmm(CFG.hours.market)})}</div>`;
   const stock=S.inv.length?S.inv.map(st=>{
