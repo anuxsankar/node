@@ -1544,6 +1544,9 @@ html.rm .spin,html.nm .spin{animation:none}
 /* Anu: before the market opens, marketing collapses (it can't be used yet) */
 .tools.prem .boosts,.tools.prem .mk-h,.tools.prem .running{display:none}
 
+/* H-150: the pause screen hides everything behind it (no reading lots or watching stocks while paused) */
+.scrim.pausescrim{background:var(--bg,#05080B);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);z-index:60}
+
 </style>
 </head>
 <body>
@@ -1656,7 +1659,7 @@ const CFG={
    // O21: ambient headlines under a day-2 follow-up
   // Y33/Y37 operator benefits. Odds by trust weight w (0 cool … 1 warm); counts stack to cap. Effects are first guesses for the bot.
   perks:{uncommon:[.2,.6], veryRare:[.03,.15], cap:2, monitor:20, early:30, influencer:.5, bulk:.5, customs:.5, verified:1.1, berths:.7, heat:{rare:6,veryRare:12}},
-  worldAfter:45, textHold:10, textHoldMax:90, listedDarkAfter:20, cleanSaleSay:.35,            // marketplace "Selling since" range (V13: late 2001)
+  worldAfter:45, textGap:12, noteGap:1600, listedDarkAfter:20, cleanSaleSay:.35,            // marketplace "Selling since" range (V13: late 2001)
   // Per-act dials (X2b, H-024). A key set here overrides the flat value above for that act; cf(key) reads it.
   // Act I = the flat values. Acts II–III are first guesses for the bot to tune.
   acts:{
@@ -2453,10 +2456,13 @@ const holdOf=id=>{const l=S.cart.find(x=>x.id===id);return l&&l.hold>S.t?l.hold:
 // cover it, Acheron's micro-loan may appear (T2, H-108).
 // T10 (H-120): short of cash for 11-B → Alekos offers to cover the difference at the credit line's rate (two replies: a real choice)
 function t10Short(d,q){const tot=d.price*q*(1+CFG.convFee);return d.trap&&!S.t10&&tot>S.cards[0].bal?Math.ceil(tot-S.cards[0].bal):0}
-function t10Accept(){const o=S.t10Offer;if(!o)return;S.t10Offer=null;S.t10={amt:o.amt};S.cards[0].bal+=o.amt;S.owed+=Math.round(o.amt*(1+(S.rate||CFG.loan.rate)));buyNow(o.id)}
+// H-150 #2: accepting his cover is not a purchase. The cover only lands in the payment window for 11-B, is taken back if the
+// window closes unpaid, and is added to what's owed only when 11-B is actually paid for.
+function t10Accept(){const o=S.t10Offer;if(!o)return;S.t10Offer=null;S.t10={amt:o.amt,pending:true,applied:false};buyNow(o.id)}
+function t10Apply(on){const t=S.t10;if(!t||!t.pending||t.applied===on)return;t.applied=on;S.cards[0].bal+=on?t.amt:-Math.min(t.amt,S.cards[0].bal);dirty=true}
 function buyNow(id){if(S.co||S.phase!=='shop')return;const d=S.deals.find(x=>x.id===id);if(!d||d.stock<=0||d.expired)return;const q=Math.max(1,Math.min(d.sel,d.stock));
   {const amt=t10Short(d,q);if(amt&&!S.t10Offer){S.t10Offer={id,amt};alekos('t10Front',{},{force:true});S.chatQ.push({replies:[['alekos.t10Replies.0','t10:1'],['alekos.t10Replies.1','t10:0']]});S.thread='a';S.focus='chat';S.chatOpen=true;dirty=true;return}}
-  S.cart=[{id,q,hold:S.t+CFG.holdSecs}];loanOffer();openCheckout();dirty=true}
+  if(d.trap)t10Apply(true);S.cart=[{id,q,hold:S.t+CFG.holdSecs}];loanOffer();openCheckout();dirty=true}
 function addCart(id){
   const d=S.deals.find(x=>x.id===id);if(!d||d.stock<=0)return;
   const room=d.stock-inCart(id);const q=Math.min(d.sel,room);if(q<=0)return;
@@ -2496,7 +2502,7 @@ function resolvePay(){
   if(!S.icWarned&&!S.icWarnAt&&lines.some(l=>l.d.dk))S.icWarnAt=S.t+CFG.intercept.warnAfter;   // T9: the news warns first, a few seconds after the first dark buy
   lines.forEach(l=>{l.d.stock-=l.avail;if(l.d.rec)l.d.recBought=true;if(l.d.dk)heatUp(l.d.dk*CFG.heat.perDark*l.avail*(act_()>=3&&/Rotterdam/.test(l.d.sig&&l.d.sig.route||'')?CFG.act3.rotterdamHeat:1),'dark',l.d.name);
     if(l.d.choke){S.chokes.push({...l.d.choke,name:l.d.name,day:S.day});if(!S.saidChoke){S.saidChoke=true;alekos('chokehold',{},{force:true})}}   // X13
-    const o=createOrder(l.d,l.avail,l.d.price*l.avail*(tot/sub),co.ins&&insOk(l.d),!l.d.scam&&!l.d.trap&&Math.random()<CFG.oversell);if(l.d.trap)trapBought(o);S.stats.bought+=l.avail;S.day_.bought+=l.avail});
+    const o=createOrder(l.d,l.avail,l.d.price*l.avail*(tot/sub),co.ins&&insOk(l.d),!l.d.scam&&!l.d.trap&&Math.random()<CFG.oversell);if(l.d.trap){if(S.t10&&S.t10.pending){S.t10.pending=false;S.owed+=Math.round(S.t10.amt*(1+(S.rate||CFG.loan.rate)))}trapBought(o)}S.stats.bought+=l.avail;S.day_.bought+=l.avail});
   S.lastBuy=S.t;sfx('buy');if(S.ob&&S.ob.arrived&&S.ob.lotDay!==S.day){S.ob.lotDay=S.day;obie('say.firstLot',{busyDrop:true});obMoment('smile',3000)}   // C16: small wins
   let cb='';if(Math.random()<CFG.cashbackChance){const v=tot*R(.1,.5);c.bal+=v;S.stats.cashback+=v;cb=` Cashback: ${money(v)}.`}
   S.cart=[];S.co=null;note(`Paid ${money(tot)}.${partial?' Some items sold out first.':''}${cb}`,cb?'good':'');dirty=true;
@@ -2703,7 +2709,7 @@ function step(dt){
     S.sched=S.sched.filter(n=>{if(S.t>=n.at){news({key:n.key,art:n.art});return false}return true});
     S.fq=S.fq.filter(x=>{if(S.t>=x.at&&hushed()){x.at=S.t+1;return true}if(S.t>=x.at&&catchUp()&&!x.urgent&&!(getPath(x.base||'')||{}).urgent){x.at=S.t+2;return true}   // N5: held while 3+ chats are unread
       if(S.t>=x.at){const b=x.base||x.path.replace(/\.line$/,''),tx=getPath(b);
-      if(S.frep[x.fid]&&tx&&(tx.action||(tx.replies||[]).length)&&(x.held||0)<CFG.textHoldMax){x.at=S.t+CFG.textHold;x.held=(x.held||0)+CFG.textHold;return true}
+      if(S.t<(S.fqGap||0)){x.at=S.fqGap;return true}S.fqGap=S.t+CFG.textGap;   // H-150: one text at a time, spaced, never a burst after a hush or catch-up
       fSay(x.fid,fEntry(x.path,x.vars));if(x.fid==='sasha'&&(S.day===4||S.day===5))hush(S.day===4?CFG.hush.long:CFG.hush.med,1500);   // N6: Sasha's flag (long), her last message (medium)
    if(x.fid==='sasha'&&S.day===4&&S.sashaAt==null)S.sashaAt=todMin();
       if(tx&&tx.action==='sendHome'){S.sentOffered=true;S.frep[x.fid]={base:b,n:3,send:true,need:sendNeed()};armNudge(x.fid)}
@@ -2760,6 +2766,7 @@ function step(dt){
     for(const m of S.msgs)if(m.st==='closed'&&m.closedAt==null)m.closedAt=S.t;
   }
   const co=S.co;
+  if(S.t10&&S.t10.applied&&S.t10.pending&&(!S.co||S.co.done))t10Apply(false);   // H-150 #2: unpaid → the cover goes back
   if(co){if(co.busy&&S.t>=co.at)resolvePay();else if(!co.busy&&!co.done&&!co.frozen&&S.t>=co.exp){co.msg='Session expired. Nothing was charged.';co.tone='bad';co.done=true;dirty=true}}
   if(P==='shop'||P==='sell'||P==='dusk'){
     S.dayLeft-=dt;
@@ -3228,7 +3235,7 @@ function browserWin(){
   const tabs=b.tabs.map(x=>`<button class="btab ${x===t?'on':''}" data-act="btab" data-id="${x.id}">${x.id==='dash'?UI('apps.dashboard'):esc(Tp(x.key,x.vars))}</button>`).join('');
   const body=t.id==='dash'?(S.phase==='cold'?assignHTML():dashInner()):articleHTML(t);
   const an=anAttr('br');
-  return `<section class="win w-dashboard w-browser theme-os ${an.cls}" style="${an.st}" id="w-dashboard"><header class="tb"><span class="tb-t">${cbLogo()}${UI('apps.browser')}</span><span class="tb-btns"><button class="tb-min" data-act="bmin" aria-label="Minimise">_</button><button class="tb-min tb-close" data-act="bmin" aria-label="Close">✕</button></span></header><nav class="btabs">${tabs}</nav>${headHTML()}<div class="bview ${t.id==='dash'?'theme-charon':'theme-third'}">${body}${bstat(t)}${S.phase==='shop'&&S.pops.length?`<div class="pplayer"></div>`:''}</div></section>`;
+  return `<section class="win w-dashboard w-browser theme-os ${an.cls}" style="${an.st}" id="w-dashboard"><header class="tb"><span class="tb-t">${cbLogo()}${UI('apps.browser')}</span><span class="tb-btns"><button class="tb-min" data-act="bmin" aria-label="Minimise">_</button><button class="tb-min tb-close" data-act="bmin" aria-label="Close">✕</button></span></header><nav class="btabs">${tabs}</nav>${t.id==='dash'?headHTML():''}<div class="bview ${t.id==='dash'?'theme-charon':'theme-third'}">${body}${bstat(t)}${S.phase==='shop'&&S.pops.length?`<div class="pplayer"></div>`:''}</div></section>`;
 }
 // V41: pinned "Latest" strip: newest incoming message from anyone; click opens that thread.
 function latestMsg(){let b=null;const la=[...S.chat].reverse().find(m=>m.who==='a'&&!m.link&&(m.txt||m.ph));if(la)b={id:'a',name:UIp('apps.chat'),m:la};
@@ -3523,7 +3530,7 @@ function renderFloat(){
     <div class="cfm-b"><button class="btn ghost" data-act="cfstay" autofocus>${T(C+'.stay')}</button><button class="btn ${S.confirm==='clockOut'?'clockout big':'act'}" data-act="cfgo">${T(C+'.go')}</button></div></div></div>`}   // V54
   if(S.wp&&S.wp.kind!=='state')h+=wpHTML();   // E19: the wipe program (E20: the State's copy runs inline on the blue screen)
   if(S.pops.length&&inDash()&&!S.wp){placePops();const P=S.pops.filter(p=>p.px!=null);if(P.length)h+=`<div class="popf">${P.map(popHTML).join('')}</div>`}
-  if(S.paused&&(P==='shop'||P==='sell'))h+=`<div class="scrim">${win('sys',UI('actions.pause'),`<div class="wb"><button class="btn wide big act" data-act="pause">${UI('actions.resume')}</button></div>`,{cls:'sheet'})}</div>`;
+  if(S.paused&&(P==='shop'||P==='sell'||P==='dusk'))h+=`<div class="scrim pausescrim">${win('sys',UI('actions.pause'),`<div class="wb"><button class="btn wide big act" data-act="pause">${UI('actions.resume')}</button></div>`,{cls:'sheet'})}</div>`;
   if(S.beat){const el=performance.now()-S.beat.t0,n=reduced()?S.beat.txt.length:Math.min(S.beat.txt.length,Math.floor(el/CFG.dayBeat.typeMs));if(n>(S.beat.typed||0)){if(S.beat.txt[n-1]!==' ')sfx('type');S.beat.typed=n}
     h+=`<div class="daybeat ${el>CFG.dayBeat.ms-CFG.dayBeat.fade&&!reduced()?'out':''}" role="status" aria-label="${esc(S.beat.txt)}"><span>${esc(S.beat.txt.slice(0,n))}<span class="cur${n<S.beat.txt.length?' solid':''}"></span></span></div>`}
   if(S.menu)h+=`<div class="menupop">${win('menu',UI('apps.menu'),`<div class="wb">${P==='shop'||P==='sell'?`<button class="btn ghost wide" data-act="pause">${S.paused?UI('actions.resume'):UI('actions.pause')}</button>`:''}<div class="opts" role="group" aria-label="${esc(UIp('options.title'))}"><b>${UI('options.title')}</b>
@@ -3919,21 +3926,26 @@ function debugAct(id){
 }
 
 /* ═════════════ frame loop */
+let noteGapAt=0;
+const workPaused=()=>S.paused&&['shop','sell','dusk'].includes(S.phase);   // H-150
 let last=performance.now();
 function frame(now){
   requestAnimationFrame(frame);   // H-084: schedule first, so an error in one frame can never stop the game
   const dt=Math.min(.5,(now-last)/1000);last=now;
   if((S.phase==='shop'||S.phase==='sell'||S.phase==='dusk')&&!S.paused&&!S.confirm&&!S.mktHold&&!document.hidden)step(S.phase==='dusk'?dt*CFG.hours.prepSpeed:dt);
-  else if(!document.hidden&&!['wipe','doj','decom','closed','greeks'].includes(S.phase))mkDrift(now);
+  else if(!document.hidden&&!workPaused()&&!['wipe','doj','decom','closed','greeks'].includes(S.phase))mkDrift(now);   // H-150: nothing moves while paused
   const delay=band()==='warm'?CFG.chat.warmDelay:CFG.chat.coolDelay;
-  if(S.chatQ.length&&now>=chatAt&&!hushed()){if(chatAt)popChat();const nx=S.chatQ[0];chatAt=now+(nx&&nx.beat?CFG.chat.chunkDelay:delay)+S.hesPause;S.hesPause=0;dirty=true}
+  if(S.chatQ.length&&now>=chatAt&&!hushed()&&!workPaused()){if(chatAt)popChat();const nx=S.chatQ[0];chatAt=now+(nx&&nx.beat?CFG.chat.chunkDelay:delay)+S.hesPause;S.hesPause=0;dirty=true}
   if(S.preAt&&now>=S.preAt){S.preAt=0;preText()}
   if(S.firstAt)for(const fid in S.firstAt)if(now>=S.firstAt[fid]){delete S.firstAt[fid];firstText(fid)}
   if(S.beat){if(now-S.beat.t0>=CFG.dayBeat.ms)S.beat=null;dirty=true}
   if(S.avNote&&!S.beat&&!hushed()){S.avNote=false;noteEl(UIp('notes.bulwark'),UIp('bulwark.expiredNote'),'warn','avopen','')}
   if(S.talkNext&&S.phase==='night'&&!S.ex&&!S.chatQ.length&&!S.beat&&!hushed()){const t=S.talkNext;S.talkNext=null;talk(t)}   // a conversation waiting for a quiet moment
-  if(S.newsQ&&S.newsQ.length&&S.phase!=='shop'&&!S.co&&!hushed()){const q=S.newsQ;S.newsQ=[];q.forEach(([h,a,id])=>{if(!S.br.opened||S.br.min){S.br.unseen++;bump('browser')}newsEl(h,articleLede(a),id);blip(520)})}
-  if(S.noteQ&&S.noteQ.length&&!hushed()){const q=S.noteQ;S.noteQ=[];q.forEach(a=>noteEl(...a))}
+  // H-150 #4: held notifications come back one at a time after a hush, never as a burst (a burst pushed the open cards
+  // down over controls, and V26 then snapped them shut: the rail "glitch")
+  if(now>=noteGapAt&&!hushed()){
+    if(S.newsQ&&S.newsQ.length&&S.phase!=='shop'&&!S.co){const [h,a,id]=S.newsQ.shift();if(!S.br.opened||S.br.min){S.br.unseen++;bump('browser')}newsEl(h,articleLede(a),id);blip(520);noteGapAt=now+CFG.noteGap}
+    else if(S.noteQ&&S.noteQ.length){noteEl(...S.noteQ.shift());noteGapAt=now+CFG.noteGap}}
   // V52: the morning nudge escalates gently: ~20 s in without opening the portal, the Cipher Browser button flashes (orange
   // holds after) and the portal icon bounces once; again every ~30 s until the portal is opened
   if(S.phase==='morning'&&S.day>1&&S.portalSeen!==S.day&&!S.beat){if(!S.mornAt)S.mornAt=now;
